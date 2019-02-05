@@ -1,0 +1,138 @@
+In addition there are 3 policy numbers where we have fees but no entry in the mgs_eur_stc.
+
+106658, 106659,50763
+And they only have 1 entry on the mgs.dbo.MGS_ACCOUNT_TO_POLICY table. 
+
+These I cannot account for. 
+
+From: Hudson, John 
+Sent: 24 January 2019 12:42
+To: 'Shah, Nilesh'; 'massimiliano.martella.external@atos.net'
+Cc: 'Jackson, Shelley'; Jackson, Shelley; Knox, Colin - Glasgow; Wojtkowiak, Claire - ATOS Email Account; Radestock, Kevin
+Subject: Probable Data Issue with the FEES DATA on MGS.
+
+Afternoon Nilesh I suspect you’ll be the one who will be affected by this.. 
+
+
+I suspect there is a problem in the process where the account number in the fees table was transformed into the policy number. 
+
+Checking the totals we were getting for REPORT 27 . (REDEMPTIONS & FEES REPORTS) we were trying to establish why there were differences.
+
+Simply summing the fees by fee month produced the desired results but we were not getting them and logically we should have, all we were doing was joining to the static table.
+
+So as part of my analysis I looked to see if there were policy number IN the fees table BUT NOT in the static table. 
+
+And I found a few. 
+
+Now originally the fees table has account number and not the policy number. 
+
+This was then denormalised. 
+
+So could it be that the problem stems from the mgs.dbo.MGS_ACCOUNT_TO_POLICY table
+
+Looking on that table for the policy number in fees not present in MGS_EUR_DYN I noted that it looked more like an account number than a policy number. 
+
+Thus is selected rows from mgs.dbo.MGS_ACCOUNT_TO_POLICY where the ACCOUNT NUMBER matched the policy number. 
+
+SELECT * FROM mgs.dbo.MGS_ACCOUNT_TO_POLICY WHERE Policy_Number IN (106656,24498)
+
+FILEID	Brand	Policy_Number	Account_Number	Record_Created	Record_Updated
+12	POM	24498	24498	53:01.0	53:01.0
+88	BOI	106656	24498	51:17.0	51:17.0
+
+Now 1 policy number is in the static table, the other is in the fees. 
+
+So I put together some SQL which would….
+
+1.	Identify rows in the ACCOUNT_TO_POLICY Table where 1 account number has more than one policy number. 
+2.	For those rows get the min and max policy numbers (there’s only ever a max of 2) 
+3.	Check which number is in the fees table and which is in the static table. 
+
+SQL
+
+SELECT r.p1, r.p2, 
+       (SELECT COUNT(*) FROM mgs.dbo.MGS_EUR_STC WHERE Policy_Number = p1 and Latest_Indicator = 1) STC_test_p1 ,
+          (SELECT COUNT(*) FROM mgs.dbo.MGS_EUR_STC WHERE Policy_Number = p2 and Latest_Indicator = 1) STC_test_p2 ,
+       (SELECT COUNT(*) FROM mgs.dbo.FEES_DATA WHERE Policy_Number = p1 ) FEE_test_p1 ,
+          (SELECT COUNT(*) FROM mgs.dbo.FEES_DATA WHERE Policy_Number = p2 ) FEE_test_p2 
+
+FROM (
+SELECT account_number, MAX(policy_number) p1, MIN(policy_number) p2 ,  COUNT(distinct Policy_Number) cval
+FROM mgs.dbo.MGS_ACCOUNT_TO_POLICY 
+ GROUP BY Account_Number) r
+WHERE r.cval > 1
+
+RESULTS
+
+p1	p2	STC_test_p1	STC_test_p2	FEE_test_p1	FEE_test_p2
+106640	21641	0	1	1	0
+106651	24493	0	1	1	0
+106649	24491	0	1	1	0
+106643	24485	0	1	1	0
+106653	24495	0	1	1	0
+106650	24492	0	1	1	0
+106654	24496	0	1	1	0
+106632	21252	0	1	1	0
+106631	21251	0	1	1	0
+106656	24498	0	1	1	0
+106645	24487	0	1	1	0
+106648	24490	0	1	1	0
+106652	24494	0	1	1	0
+106647	24489	0	1	1	0
+106642	24484	0	1	1	0
+106641	21642	0	1	1	0
+106638	21639	0	1	1	0
+106634	21635	0	1	1	0
+106655	24497	0	1	1	0
+106646	24488	0	1	1	0
+106633	21634	0	1	1	0
+106635	21636	0	1	1	0
+106639	21640	0	1	1	0
+106657	38259	0	1	1	2
+106644	24486	0	1	1	0
+106637	21638	0	1	1	0
+106630	21250	0	1	1	0
+106636	21637	0	1	1	0
+
+
+As you can see every row with one odd exception looks to be present in the STATIC table under 1 number but in the fees under another. 
+
+I suspect this is simply down to us being told the account to policy number was at least unique. 
+
+SUGGESTION. 
+
+To determine what policy belongs in the fees table I would use the STC table as a cross check. 
+
+So to get the correct policy number which aligns to the account 
+
+I.E. 
+SELECT account_number, policy_number
+FROM mgs.dbo.MGS_ACCOUNT_TO_POLICY 
+  WHERE Policy_Number  IN (SELECT distinct Policy_Number FROM mgs.dbo.MGS_EUR_STC WHERE  Latest_Indicator = 1 ) 
+
+If we put that logic into the checking query where we looked at problematic rows… 
+
+SELECT r.p1, r.p2, 
+       (SELECT COUNT(*) FROM mgs.dbo.MGS_EUR_STC WHERE Policy_Number = p1 and Latest_Indicator = 1) STC_test_p1 ,
+          (SELECT COUNT(*) FROM mgs.dbo.MGS_EUR_STC WHERE Policy_Number = p2 and Latest_Indicator = 1) STC_test_p2 ,
+       (SELECT COUNT(*) FROM mgs.dbo.FEES_DATA WHERE Policy_Number = p1 ) FEE_test_p1 ,
+          (SELECT COUNT(*) FROM mgs.dbo.FEES_DATA WHERE Policy_Number = p2 ) FEE_test_p2 
+
+FROM (
+SELECT account_number, MAX(policy_number) p1, MIN(policy_number) p2 ,  COUNT(distinct Policy_Number) cval
+FROM mgs.dbo.MGS_ACCOUNT_TO_POLICY 
+  WHERE Policy_Number  IN (SELECT distinct Policy_Number FROM mgs.dbo.MGS_EUR_STC WHERE  Latest_Indicator = 1 ) 
+ GROUP BY Account_Number) r
+WHERE r.cval > 1
+
+
+We get no results so that would deal with that issue. 
+
+So in conclusion the fees data will need to be either recreated and the process of denormalising them amended to utlise MGS_EUR_STC
+
+(you could simply update the problematic rows but I’m guessing you’d want to run and test the amended process as it would be an ongoing process whenever new fees data is loaded) 
+
+If I’m wrong about this please shout at me. 
+
+John. 
+ 
