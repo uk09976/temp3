@@ -1,0 +1,60 @@
+
+using System;
+using System.Data.OleDb;
+
+namespace ST_6216ebfee46a4ac69412888956e7cfdf
+{
+       [Microsoft.SqlServer.Dts.Tasks.ScriptTask.SSISScriptTaskEntryPointAttribute]
+       public partial class ScriptMain : Microsoft.SqlServer.Dts.Tasks.ScriptTask.VSTARTScriptObjectModelBase
+       {
+              public void Main()
+              {
+            // GET NAME OF FIRST SHEET
+            string filename = Dts.Variables["User::datasourceProcessing"].Value.ToString();
+            string sheetName = null;
+            bool dummy = true;
+
+            string connStr =
+                String.Format("Provider=Microsoft.ACE.OLEDB.12.0;Data Source={0};Extended Properties=\"EXCEL 12.0 XML;HDR=YES\";", filename);
+            var conn = new OleDbConnection(connStr);
+            try
+            {
+                conn.Open();
+
+                using (var dtSheet = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null))
+                {
+                    var row0 = dtSheet.Rows[0];
+                    sheetName = row0["TABLE_NAME"].ToString();
+                }
+
+                if (!String.IsNullOrEmpty(sheetName))
+                {
+                    Dts.Variables["sheetName"].Value = sheetName;
+                    Dts.Events.FireInformation(1, "User::sheetName", sheetName, "", 0, ref dummy);
+                    Dts.TaskResult = (int)ScriptResults.Success;
+                }
+                else
+                {
+                    throw new Exception("No SheetName found!");
+                }
+            }
+            catch (Exception ex)
+            {
+                Dts.Events.FireError(0, "User::sheetName", ex.Message, String.Empty, 0);
+                Dts.TaskResult = (int)ScriptResults.Failure;
+            }
+            finally
+            {
+                conn.Close();
+                conn.Dispose();
+            }
+
+            Dts.TaskResult = (int)ScriptResults.Success;
+              }
+        enum ScriptResults
+        {
+            Success = Microsoft.SqlServer.Dts.Runtime.DTSExecResult.Success,
+            Failure = Microsoft.SqlServer.Dts.Runtime.DTSExecResult.Failure
+        };
+       }
+}
