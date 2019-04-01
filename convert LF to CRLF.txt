@@ -1,0 +1,19 @@
+Public Sub Main()
+    Dim pk As New Package
+
+
+    Dim file As New System.IO.StreamReader("c:\test.txt")
+    Dim data As String
+    data = file.ReadToEnd()
+    data = data.Replace(vbCrLf, vbLf)
+    data = data.Replace(vbCr, vbLf)
+    data = data.Replace(vbLf, vbCrLf)
+    file.Close()
+
+    Dim writer As New System.IO.StreamWriter("c:\test.txt", False)
+    writer.Write(data)
+    writer.Flush()
+    writer.Close()
+    
+		Dts.TaskResult = ScriptResults.Success
+	End Sub
