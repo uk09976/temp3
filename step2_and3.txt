@@ -1,0 +1,91 @@
+-- step 2
+
+SELECT Acc_DIMYearMonth_Reporting, BR_ID, Acc_DateofBirth, 
+                 UPPER(REPLACE(REPLACE(REPLACE(REPLACE(
+           REPLACE(REPLACE(REPLACE(REPLACE(
+           REPLACE(REPLACE(REPLACE(REPLACE(
+           REPLACE(REPLACE(REPLACE(REPLACE(
+                                    REPLACE(BR_PropertyAddress,' ','')
+                        ,'.',''),',',''),'''',''),'/','')
+                     ,'\',''),';',''),':',''),'@','')
+                     ,'#',''),'-',''),'_',''),')','')
+                     ,'(',''),'*',''),'&',''),'"','')
+                     ) MEASURE_VAL_CLEANED_PROPERERYADD,
+          UPPER(REPLACE(REPLACE(REPLACE(REPLACE(
+           REPLACE(REPLACE(REPLACE(REPLACE(
+           REPLACE(REPLACE(REPLACE(REPLACE(
+           REPLACE(REPLACE(REPLACE(REPLACE(
+                                    REPLACE(BR_PropertyPostcode,' ','')
+                        ,'.',''),',',''),'''',''),'/','')
+                     ,'\',''),';',''),':',''),'@','')
+                     ,'#',''),'-',''),'_',''),')','')
+                     ,'(',''),'*',''),'&',''),'"','')
+                     ) MEASURE_VAL_CLEANED_PROPERTY_PCODE,
+                     CASE WHEN  BR_PropertyValue <= 100000 
+  THEN '   £0 to £100k'
+WHEN  BR_PropertyValue > 100000 AND BR_PropertyValue <= 150000 
+  THEN '>£100k to £150k'
+WHEN (BR_PropertyValue > 150000 AND BR_PropertyValue <= 200000) 
+  THEN '>£150k to £200k'
+WHEN 
+  (BR_PropertyValue> 200000 AND BR_PropertyValue <= 250000) 
+  THEN '>£200k to £250k'
+WHEN 
+  (BR_PropertyValue > 250000 AND BR_PropertyValue <= 300000) 
+  THEN '>£250k to £300k'
+WHEN 
+  (BR_PropertyValue> 300000 AND BR_PropertyValue <= 350000) 
+  THEN '>£300k to £350k'
+WHEN 
+  (BR_PropertyValue > 350000 AND BR_PropertyValue <= 400000) 
+  THEN '>£350k to £400k'
+WHEN 
+  (BR_PropertyValue> 400000 AND BR_PropertyValue<= 450000) 
+  THEN '>£400k to £450k'
+END banding 
+INTO HTB_ISA_Reporting_View_TEMP2
+FROM HTB_ISA_Reporting_View_TEMP
+
+
+-- step 3
+Results for property value banding
+
+SELECT banding, COUNT(distinct br_Id) , count(distinct final_address)
+FROM (
+SELECT step_2.*, MAX(banding) OVER (PARTITION BY final_address) max_banding
+FROM (
+SELECT step_1.*, 
+CASE WHEN MEASURE_VAL_CLEANED_PROPERERYADD_FLAT_OR_NUMBER = 'Y'
+      THEN LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,10)
+      ELSE MEASURE_VAL_CLEANED_PROPERERYADD
+      END
++  MEASURE_VAL_CLEANED_PROPERTY_PCODE final_address,
+  MIN(Acc_DIMYearMonth_Reporting) OVER (partition by CASE WHEN MEASURE_VAL_CLEANED_PROPERERYADD_FLAT_OR_NUMBER = 'Y'
+      THEN LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,10)
+      ELSE MEASURE_VAL_CLEANED_PROPERERYADD
+      END
++  MEASURE_VAL_CLEANED_PROPERTY_PCODE) min_date
+FROM (
+SELECT   * , CASE WHEN LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,4) ='FLAT'
+     THEN 'Y'
+     WHEN (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '0'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '1'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '2'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '3'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '4'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '5'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '6'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '7'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '8'
+      OR (LEFT(MEASURE_VAL_CLEANED_PROPERERYADD,1)) = '9'
+     THEN 'Y'
+     ELSE 'N'
+END MEASURE_VAL_CLEANED_PROPERERYADD_FLAT_OR_NUMBER
+   FROM HTB_ISA_Reporting_View_TEMP
+   ) step_1
+   ) step_2) step_3
+WHERE min_date = Acc_DIMYearMonth_Reporting
+GROUP BY banding
+
+
+
