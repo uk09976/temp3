@@ -1,0 +1,11 @@
+SELECT r.*
+INTO HTB_ISA_Reporting_View_TEMP
+FROM dbo.HTB_ISA_Reporting_View r
+  WHERE Acc_DIMYearMonth_Reporting = ((100*DATEPART(year, BR_PayDate )) + DATEPART(month, BR_PayDate ))
+   AND Acc_DIMYearMonth_Reporting <= 201804
+    AND (BR_LatestRefundDate is null)
+    AND  BR_Paid_Indicator = 'Y'
+    AND (Rr_Id is null or RR_Rank = 1)
+       AND BR_ID is not null 
+   AND Acc_DIMYearMonth_Reporting <= 201903
+   AND ( BR_Status= 'Paid' OR  BR_Status = 'Completed' OR BR_Status = 'Scheduled')
